@@ -13,12 +13,12 @@ contains
     real(dp) :: FDD, maxarg
 
 
-    maxarg = 300_dp ! Upper cutoff for exponential function
+    maxarg = 300. ! Upper cutoff for exponential function
     FDD = 1/(1+exp(min((E-a)/b, maxarg)))
   end function FDD
     
     
-  function reintegrand(p, k, w, kbT, mu, singular_tol)
+  function reintegrand(p, k, w, kbT, mu, singulartol)
     ! The integrand in the integral to calculate the real part of the dielectric
     ! function. Assuming p, k, w are positive.
     ! 
@@ -37,21 +37,12 @@ contains
     !   Thermal energy (kb - Boltzmann's constant, T is temperature) in a.u.
     ! mu: scalar
     !   Chemical potential in a.u.
-    ! singular_tol: scalar
-    !   tolerance to handle singular points, where the arguments in the
+    ! singulartol: scalar
+    !   tolerance to handle singularities, where the arguments in the
     !   logarithms become 0.
     
-    real(dp), intent(in) :: p, k, w, mu, kbT, singular_tol
-    real(dp) :: logpart, reintegrand, logtol
-    real(dp) :: a, b, c, d, p1, p2
-
-    ! interface
-    !    function FDD(E, mu, kbT)
-    !      import
-    !      real(dp), intent(in) :: E, mu, kbT
-    !      real(dp) :: FDD
-    !    end function FDD
-    ! end interface
+    real(dp), intent(in) :: p, k, w, mu, kbT, singulartol
+    real(dp) :: logpart, reintegrand, logtol, a, b, c, d, p1, p2
 
     logtol = 1e-6
     
@@ -64,15 +55,17 @@ contains
     p2 = k**2 / (2*p*k - 2*w)
 
     ! low "x" approximation for log(1+x)
-    if (p2 < logtol) then ! p1 < p2
+    if (abs(p2) < logtol) then ! p1 < p2
        logpart = 2*p1 + 2*p2
     else
        ! logpart = log(abs(1+p1)) - log(abs(1-p1)) &
        !           + log(abs(1+p2)) - log(abs(1-p2))
        ! tol avoids the singularities
-       logpart = 1/2*log(((a*c)**2 + singular_tol)/((b*d)**2 + singular_tol))
+       ! logpart = 0.5*log(((a*c)**2 + singular_tol)/((b*d)**2 + singular_tol))
+       logpart = 0.5 * log((a**2 + singulartol)/(d**2 + singulartol)) &
+            + 0.5*log((c**2 + singulartol)/(b**2 + singulartol))
     end if
-    
+    ! logpart = log(abs(a/d)) + log(abs(c/b))
     reintegrand = FDD(p**2/2, mu, kbT)*p*logpart    
     
   end function reintegrand
@@ -90,7 +83,7 @@ contains
     
     real(dp), intent(in) :: k, w, mu, kbT
     real(dp), intent(in), optional :: usertol
-    real(dp) :: pmax, p, dp, er, er2, ertemp, pi, tol, singular_tol
+    real(dp) :: xmax, x, dx, er, er2, pi, tol, singular_tol
     integer  :: i, imax, loopcount
 
     if (present(usertol)) then
@@ -99,47 +92,50 @@ contains
        tol = 1e-6
     end if
     
-    pi = 3.1415927
+    pi = 3.1415927 ! Yum :p
     
-    pmax = sqrt(2*(mu + 5*kbT))
+    singular_tol = 1e-6 ! singularity tolerance
+    
+    xmax = sqrt(2*(mu + 15*kbT)) ! 1/exp(15) \approx 1e-7
     imax = 2000
-    dp = pmax/imax
+    dx = xmax/imax
 
     ! integrate
-    er = 0.
+    er = 0.0
     do i=1,imax
-       p = i*dp
-       er = er + reintegrand(p, k, w, kbT, mu, singular_tol)*dp
+       x = i*dx
+       er = er + reintegrand(x, k, w, kbT, mu, singular_tol)*dx
     end do
     er2 = er
 
     ! integrate at least twice to make sure our treatment of singularities is
     ! satisfactory.
-    loopcount = 0
-    do while ((ertemp /= 0) .and. (abs(ertemp - er2)/ertemp < tol))
-       ! Don't get stuck in a loop forever.
-       if (loopcount == 5) then
-          ! We failed. Go home!
-          er = 0.
-          return
-       end if
-       loopcount = loopcount + 1
+    ! loopcount = 0
+    ! do while ((er /= 0) .and. (abs(er - er2)/er > tol)) ! Just a while loop
+    !    write (*,*) loopcount
+    !    ! Don't get stuck in a loop forever.
+    !    if (loopcount == 10) then
+    !       ! We failed. Go home!
+    !       er = 0.
+    !       return 
+    !    end if
+    !    loopcount = loopcount + 1
        
-       ertemp = er2 ! temporary value holder
-       er2 = 0.
-       ! Try a smaller number for the singularities
-       singular_tol = singular_tol/2
+    !    er = er2 ! Hold previous er2 value
+    !    er2 = 0.
+    !    ! Try a smaller number for the singularities
+    !    singular_tol = singular_tol/2
        
-       do i=1,imax
-          p = i*dp
-          er2 = er2 + reintegrand(p, k, w, kbT, mu, singular_tol)*dp
-       end do
+    !    do i=1,imax
+    !       x = i*dx
+    !       er2 = er2 + reintegrand(x, k, w, kbT, mu, singular_tol)*dx
+    !    end do
        
-       
-    end do
-    er = ertemp
-    er = 1 + 2 / pi / k**3 * er
+    ! end do
     
+    er = 1 + 2 / pi / k**3 * er
+    !write (*, fmt="(f8.5, a, f8.5, a, f8.5)") w, " ", er, " ", er2
+
   end function redielectric
 
   function imdielectric(k, w, kbT, mu) result(ei)
