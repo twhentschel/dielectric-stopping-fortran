@@ -1,7 +1,6 @@
 module RPAdielectric
   implicit none
-  private
-  public :: redielectric, imdielectric, reintegrand, dp
+  public
   
   integer, parameter :: dp = selected_real_kind(15, 307)
   
