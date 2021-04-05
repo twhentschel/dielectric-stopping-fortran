@@ -44,7 +44,7 @@ contains
     real(dp), intent(in) :: p, k, w, mu, kbT, singulartol
     real(dp) :: logpart, reintegrand, logtol, a, b, c, d, p1, p2
 
-    logtol = 1e-6
+    logtol = 1e-3
     
     a = k**2 + 2*p*k + 2*w
     b = k**2 - 2*p*k + 2*w
@@ -58,14 +58,15 @@ contains
     if (abs(p2) < logtol) then ! p1 < p2
        logpart = 2*p1 + 2*p2
     else
-       ! logpart = log(abs(1+p1)) - log(abs(1-p1)) &
-       !           + log(abs(1+p2)) - log(abs(1-p2))
        ! tol avoids the singularities
-       ! logpart = 0.5*log(((a*c)**2 + singular_tol)/((b*d)**2 + singular_tol))
        logpart = 0.5 * log((a**2 + singulartol)/(d**2 + singulartol)) &
             + 0.5*log((c**2 + singulartol)/(b**2 + singulartol))
+       ! ! Equivalent expression
+       ! logpart = log(abs(1+p1)) - log(abs(1-p1)) &
+       !           + log(abs(1+p2)) - log(abs(1-p2))
+       
     end if
-    ! logpart = log(abs(a/d)) + log(abs(c/b))
+
     reintegrand = FDD(p**2/2, mu, kbT)*p*logpart    
     
   end function reintegrand
@@ -89,14 +90,14 @@ contains
     if (present(usertol)) then
        tol = usertol
     else
-       tol = 1e-6
+       tol = 1e-4
     end if
     
     pi = 3.1415927 ! Yum :p
     
     singular_tol = 1e-6 ! singularity tolerance
     
-    xmax = sqrt(2*(mu + 15*kbT)) ! 1/exp(15) \approx 1e-7
+    xmax = sqrt(2*(mu + 20*kbT)) ! 1/exp(20) \approx 1e-9
     imax = 2000
     dx = xmax/imax
 
@@ -106,35 +107,37 @@ contains
        x = i*dx
        er = er + reintegrand(x, k, w, kbT, mu, singular_tol)*dx
     end do
-    er2 = er
-
+    er2 = er ! treat er2 as a temporary place holder
+    er = er2 + tol + 1 ! Need to get into do-while loop
+    
     ! integrate at least twice to make sure our treatment of singularities is
     ! satisfactory.
-    ! loopcount = 0
-    ! do while ((er /= 0) .and. (abs(er - er2)/er > tol)) ! Just a while loop
-    !    write (*,*) loopcount
-    !    ! Don't get stuck in a loop forever.
-    !    if (loopcount == 10) then
-    !       ! We failed. Go home!
-    !       er = 0.
-    !       return 
-    !    end if
-    !    loopcount = loopcount + 1
+    loopcount = 0
+    do while ((er /= 0) .and. (abs(er - er2)/er > tol)) ! Just a while loop
+       ! Don't get stuck in a loop forever.
+       if (loopcount == 10) then
+          ! We failed. Go home!
+          print *, "Convergence failed due to singularities in RPAdielectric: ",&
+               "redielectric()"
+          ! Return our best guess
+          er = 1 + 2 / pi / k**3 * er2 
+          return 
+       end if
+       loopcount = loopcount + 1
        
-    !    er = er2 ! Hold previous er2 value
-    !    er2 = 0.
-    !    ! Try a smaller number for the singularities
-    !    singular_tol = singular_tol/2
+       er = er2 ! Hold previous er2 value
+       er2 = 0.
+       ! Try a smaller number for the singularities
+       singular_tol = singular_tol/10
        
-    !    do i=1,imax
-    !       x = i*dx
-    !       er2 = er2 + reintegrand(x, k, w, kbT, mu, singular_tol)*dx
-    !    end do
-       
-    ! end do
+       do i=1,imax
+          x = i*dx
+          er2 = er2 + reintegrand(x, k, w, kbT, mu, singular_tol)*dx
+       end do
+
+    end do
     
-    er = 1 + 2 / pi / k**3 * er
-    !write (*, fmt="(f8.5, a, f8.5, a, f8.5)") w, " ", er, " ", er2
+    er = 1 + 2 / pi / k**3 * er2
 
   end function redielectric
 
@@ -148,5 +151,16 @@ contains
     b=abs(2*w+k**2)/2./k
     ei=2 * kbT/k**3 * log(FDD(mu, b**2/2, kbT)/FDD(mu, a**2/2, kbT)) 
   end function imdielectric
+
+
+  function elf(k, w, kbT, mu)
+    real(dp), intent(in) :: k, w, mu, kbT
+    real(dp) :: elf, er, ei
+    
+    er = redielectric(k, w, kbT, mu)
+    ei = imdielectric(k, w, kbT, mu)
+    elf = ei / (ei**2 + er**2)
+ 
+  end function elf
   
 end module RPAdielectric
