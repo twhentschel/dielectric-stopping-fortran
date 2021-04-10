@@ -3,17 +3,23 @@ module RPAdielectric
   public
   
   integer, parameter :: dp = selected_real_kind(15, 307)
-  
+  real(dp), parameter :: pi = 3.1415927 ! Yum :p
 contains
   
-  function FDD(E, a, b)
+  function FDD(E, a, b, g_in)
     ! Fermi-Dirac Distriution function.
     real(dp), intent(in) :: E, a, b
-    real(dp) :: FDD, maxarg
+    real(dp), intent(in), optional :: g_in ! density of states
+    real(dp) :: FDD, maxarg, g
 
+    if (present(g_in)) then
+       g = g_in
+    else
+       g = 1
+    end if
 
     maxarg = 300. ! Upper cutoff for exponential function
-    FDD = 1/(1+exp(min((E-a)/b, maxarg)))
+    FDD = g/(1+exp(min((E-a)/b, maxarg)))
   end function FDD
     
     
@@ -83,7 +89,7 @@ contains
     
     real(dp), intent(in) :: k, w, mu, kbT
     real(dp), intent(in), optional :: usertol
-    real(dp) :: xmax, x, dx, er, er2, pi, tol, singular_tol
+    real(dp) :: xmax, x, dx, er, er2, tol, singular_tol
     integer  :: i, imax, loopcount
 
     if (present(usertol)) then
@@ -92,7 +98,6 @@ contains
        tol = 1e-4
     end if
     
-    pi = 3.1415927 ! Yum :p
     
     singular_tol = 1e-6 ! singularity tolerance
     
@@ -114,7 +119,7 @@ contains
     loopcount = 0
     do while ((er /= 0) .and. (abs(er - er2)/er > tol)) ! Just a while loop
        ! Don't get stuck in a loop forever.
-       if (loopcount == 10) then
+       if (loopcount >= 10) then
           ! We failed. Go home!
           print *, "Convergence failed due to singularities in RPAdielectric: ",&
                "redielectric()"
@@ -155,11 +160,9 @@ contains
   function elf(k, w, kbT, mu)
     real(dp), intent(in) :: k, w, mu, kbT
     real(dp) :: elf, er, ei
-    
     er = redielectric(k, w, kbT, mu)
     ei = imdielectric(k, w, kbT, mu)
     elf = ei / (ei**2 + er**2)
- 
   end function elf
   
 end module RPAdielectric
