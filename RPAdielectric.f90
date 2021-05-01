@@ -1,9 +1,9 @@
 module RPAdielectric
+  use utils, only : dp, pi
   implicit none
-  public
+  private
+  public FDD, redielectric, imdielectric, elf
   
-  integer, parameter :: dp = selected_real_kind(15, 307)
-  real(dp), parameter :: pi = 3.1415927 ! Yum :p
 contains
   
   function FDD(E, a, b, g_in)
@@ -76,7 +76,7 @@ contains
     
   end function reintegrand
 
-  function redielectric(k, w, kbT, mu, usertol) result(er)
+  function redielectric(k, w, kbT, mu, usertol, printmssg_in) result(er)
     ! Returns the real part of the RPA dielectric function.
     ! Integrates reintegrand while avoiding the singularities.
     !
@@ -89,15 +89,22 @@ contains
     
     real(dp), intent(in) :: k, w, mu, kbT
     real(dp), intent(in), optional :: usertol
-    real(dp) :: xmax, x, dx, er, er2, tol, singular_tol
+    logical, optional  :: printmssg_in ! Print warning message if .true.
+    real(dp) :: xmax, x, dx, er, er2, tol, singular_tol, error
     integer  :: i, imax, loopcount
+    logical :: printmssg
 
     if (present(usertol)) then
        tol = usertol
     else
        tol = 1e-4
     end if
-    
+
+    if (.not. present(printmssg_in)) then
+       printmssg = .false.
+    else
+       printmssg = .true.
+       end if
     
     singular_tol = 1e-6 ! singularity tolerance
     
@@ -116,13 +123,18 @@ contains
     
     ! integrate at least twice to make sure our treatment of singularities is
     ! satisfactory.
+    error = abs(er - er2)/er
     loopcount = 0
-    do while ((er /= 0) .and. (abs(er - er2)/er > tol)) ! Just a while loop
+    do while ((er /= 0) .and. (error > tol)) ! Just a while loop
        ! Don't get stuck in a loop forever.
        if (loopcount >= 10) then
           ! We failed. Go home!
-          print *, "Convergence failed due to singularities in RPAdielectric: ",&
-               "redielectric()"
+          if (printmssg) then
+             print *, "RPAdielectric: Convergence failed due to singularities in ",&
+                  "redielectric(): "
+             print "(a, e9.4, a, e9.4, a, e9.2)", "k = ", k, "; w = ", w,&
+                  "; confidence in result: ", error
+          end if
           ! Return our best guess
           er = 1 + 2 / pi / k**3 * er2 
           return 
@@ -138,7 +150,7 @@ contains
           x = i*dx
           er2 = er2 + reintegrand(x, k, w, kbT, mu, singular_tol)*dx
        end do
-
+       error = abs(er - er2)/er
     end do
     
     er = 1 + 2 / pi / k**3 * er2
@@ -157,10 +169,13 @@ contains
   end function imdielectric
 
 
-  function elf(k, w, kbT, mu)
+  function elf(k, w, kbT, mu, printmssg)
     real(dp), intent(in) :: k, w, mu, kbT
+    logical, intent(in), optional :: printmssg
     real(dp) :: elf, er, ei
-    er = redielectric(k, w, kbT, mu)
+
+    ! I'm surprised passing an optional arg unchecked worked (for now)...
+    er = redielectric(k, w, kbT, mu, printmssg_in=printmssg)
     ei = imdielectric(k, w, kbT, mu)
     elf = ei / (ei**2 + er**2)
   end function elf
