@@ -123,7 +123,12 @@ contains
     real(dp) :: int_allspace ! integral over all space, should give sum rule
     real(dp) :: sr ! sum rule value
     real(dp) :: ELFwidth, ELFmaxpos, ELFmin, ELFmax ! ELF variables
-    real(dp), allocatable :: w(:), y(:) ! integration variable and integrand
+    ! real(dp), allocatable :: w(:), y(:) ! integration variable and integrand
+    ! Three ranges in omega-space corresponding to 3 possible relative
+    ! locations of k*v (upper limit of omega interval)
+    real(dp) :: wminrange(100), wmaxrange(100), wELFrange(999)
+    real(dp) :: yminrange(size(wminrange)), ymaxrange(size(wmaxrange))
+    real(dp) :: yELFrange(size(wELFrange))
     real(dp) :: ytemp, wtemp ! tempararily holds values from w, y arrays.
     integer  :: i, N ! Number of steps for integration
 
@@ -141,69 +146,84 @@ contains
     ! rightmost edge of ELF peak
     ELFmax = ELFmaxpos + ELFwidth
 
-    ! Nothing in integration range
     if (k*v < ELFmin) then
-       N = 100
-       allocate(w(N))
-       allocate(y(N))
-       w = linspace(0.001_dp, k*v, N)
-       do i = 1, size(w)
-          y(i) = w(i) * elf(k, w(i), kbT, mu, printmssg=.true.)!, 1e-2_dp, 0._dp)
+       ! kv < ELFmin: ELF peak not in integration range
+
+       wminrange = linspace(0.001_dp, k*v, size(wminrange))
+       do i = 1, size(wminrange)
+          yminrange(i) = wminrange(i) * mELF(k, wminrange(i), kbT, mu, &
+               1e-3_dp, 0._dp)
        end do
        
-       omegaint = trapezoidal(y, w)
-       SRsatisfy = .true.
+       omegaint = trapezoidal(yminrange, wminrange)
+       ! Don't check in this case since we are not dealing
+       ! with the difficult part (peak) of the integrand
+       SRsatisfy = .true. 
        
-       deallocate(y) 
-       deallocate(w)
        return
     end if
+    
+    ! ELFmin < kv < ELFmax or ELFmax < kv
 
-    N = 200
+    ! integral from (0, ELFmin)
+    wminrange = linspace(0.001_dp, ELFmin, size(wminrange))
+    do i = 1, size(wminrange)
+       yminrange(i) = wminrange(i) * mELF(k, wminrange(i), kbT, mu, &
+            1e-3_dp, 0._dp)
+    end do
+    
+    omegaint = trapezoidal(yminrange, wminrange)
+    
+    ! points within the ELF peak
+    wELFrange = bunchspace(ELFmaxpos, ELFwidth, (size(wELFrange)+1)/2)
+    
+    ! compute integrand for each point in w
+    do i = 1, size(wELFrange)
+       yELFrange(i) = wELFrange(i) * mELF(k, wELFrange(i), kbT, mu, &
+            1e-3_dp, 0._dp)
+    end do
+    
+    ! ELFmin < kv < ELFmax
+    if ((ELFmin < k*v) .and. (k*v < ELFmax)) then
+       ! ! integral from (ELFmin, kv) and (kv, ELFmax)
 
-    ! While we do not satisfy the sum rule, do:
-    ! (not asking for too much accuracy)
-    do while ((abs(sr - int_allspace) / sr > 1e-2) &
-         .and. (N <= 800))
-       allocate(w(2*N-1))
-       allocate(y(2*N-1))
+       ! Find index corresponding to the upper limit of the integral (k*v)
+       i = binarysearch(wELFrange, k*v)
+       ! integral from [ELFmin, k*v]
+       wtemp = wELFrange(i)
+       ytemp = yELFrange(i)
+       wELFrange(i) = k*v
+       yELFrange(i) = wELFrange(i) * mELF(k, wELFrange(i), kbT, mu, &
+            1e-3_dp, 0._dp)
+       omegaint = omegaint + trapezoidal(yELFrange(1:i), wELFrange(1:i))
        
-       w = bunchspace(ELFmaxpos, ELFwidth, N)
-
-       ! compute integrand for each point in w
-       do i = 1, size(w)
-          y(i) = w(i) * elf(k, w(i), kbT, mu, printmssg=.true.)!, 1e-2_dp, 0._dp)
+       ! integral from [kv, ELFmax \approx \infty]
+       ! (for integration over (0, \infty))
+       wELFrange(i-1) = wELFrange(i)
+       wELFrange(i) = wtemp
+       yELFrange(i-1) = yELFrange(i)
+       yELFrange(i) = ytemp
+       int_allspace = omegaint + &
+            trapezoidal(yELFrange(i-1:size(yELFrange)), &
+                        wELFrange(i-1:size(wELFrange)))
+       
+    else ! kv > ELFmax
+       ! integral from (ELFmin, ELFmax)
+       omegaint = omegaint + trapezoidal(yELFrange, wELFrange)
+       ! integral from (ELFmax, kv)
+       wmaxrange = linspace(ELFmax, k*v, size(wmaxrange))
+       do i = 1, size(wmaxrange)
+          ymaxrange(i) = wmaxrange(i) * mELF(k, wmaxrange(i), kbT, mu, &
+               1e-3_dp, 0._dp)
        end do
        
-       if ((w(1) < k*v) .and. (k*v < w(size(w)))) then
-          ! Find index corresponding to the upper limit of the integral (k*v)
-          i = binarysearch(w, k*v)
-          ! integral from [0, k*v]
-          wtemp = w(i)
-          ytemp = y(i)
-          w(i) = k*v
-          y(i) = w(i) * elf(k, w(i), kbT, mu, printmssg=.true.)!, 1e-2_dp, 0._dp)
-          omegaint = trapezoidal(y(1:i), w(1:i))
-          
-          ! integral from [0, \infty]
-          w(i-1) = w(i)
-          w(i) = wtemp
-          y(i-1) = y(i)
-          y(i) = ytemp
-          int_allspace = omegaint + trapezoidal(y(i-1:size(y)), w(i-1:size(w)))
-       else ! kv > ELFmax
-          omegaint = trapezoidal(y, w)
-          int_allspace = omegaint
-       end if
-
-       omegaint = trapezoidal(y, w)
+       omegaint = omegaint + trapezoidal(ymaxrange, wmaxrange)
+       ! In this case, the integral over (0, \infty) is the same as the
+       ! integral over (0, kv)
        int_allspace = omegaint
+    end if
 
-       deallocate(y) 
-       deallocate(w)
-       ! Make our integration grid finer
-       N = 2*N
-    end do
+    ! Is the sum rule satisfied?
     if (abs(sr - int_allspace) / sr > 1e-2)  then
        ! print *, "Convergence to sum rule failed in omega integral:"
        ! print "(a, e7.2)", "k = ", k
@@ -214,11 +234,6 @@ contains
     else
        SRsatisfy = .true.
     end if
-    ! print "(a, e16.11)", "k = ", k
-    ! print "(a, f9.4)", "sum rule = ", sr
-    ! print "(a, f9.4)", "integral = ", int_allspace
-    ! print "(a, f9.4)", "integral up to kv = ", omegaint
-    ! print *, "N = ", N
 
   end subroutine omegaintegral
 
