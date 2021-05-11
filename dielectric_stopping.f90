@@ -2,9 +2,6 @@ module DielectricStopping
   use utils, only : dp, pi
   use RPAdielectric, only : FDD, elf
   use MerminDielectric, only : mELF
-  ! sorting package from MJ Rutter  
-  use sorts, only         : quicksort
-  use random, only        : normal
   use integrate, only     : trapezoidal
   use ArrayOps, only      : linspace, logspace, bunchspace, binarysearch
   
@@ -14,24 +11,6 @@ module DielectricStopping
   
 contains
   
-  ! subroutine sortpositive(a, inp)
-  !   ! Sort numbers in array a (in place) and note the index that separates the
-  !   ! negative points from the positive points
-  !   real(dp), intent(inout) :: a(:)
-  !   integer, intent(out) :: inp
-  !   integer :: len, i
-
-  !   len = size(a)
-  !   call quicksort(a)
-
-  !   do i = 1,len
-  !      if (a(i) >= 0.) then
-  !         inp = i
-  !         exit
-  !      end if
-  !   end do
-    
-  ! end subroutine sortpositive
     
   function sumrule(n)
     real(dp), intent(in) :: n
