@@ -70,6 +70,26 @@ contains
     return
   end function binarysearch
 
+  ! subroutine sortpositive(a, inp)
+  !   ! Sort numbers in array a (in place) and note the index that separates the
+  !   ! negative points from the positive points
+  !   real(dp), intent(inout) :: a(:)
+  !   integer, intent(out) :: inp
+  !   integer :: len, i
+
+  !   len = size(a)
+  !   call quicksort(a)
+
+  !   do i = 1,len
+  !      if (a(i) >= 0.) then
+  !         inp = i
+  !         exit
+  !      end if
+  !   end do
+    
+  ! end subroutine sortpositive
+
+  
   ! function sortedinsert(arr, val) result(newarr)
   !   ! Insert a value (val) into the sorted array (arr).
   !   ! Array is assumed to sorted from least to greatest.
