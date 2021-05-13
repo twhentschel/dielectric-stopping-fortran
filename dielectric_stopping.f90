@@ -130,8 +130,8 @@ contains
 
        wminrange = linspace(0.001_dp, k*v, size(wminrange))
        do i = 1, size(wminrange)
-          yminrange(i) = wminrange(i) * mELF(k, wminrange(i), kbT, mu)!, &
-               ! 1e-3_dp, 0._dp)
+          yminrange(i) = wminrange(i) * ELF(k, wminrange(i), kbT, mu)
+
        end do
        
        omegaint = trapezoidal(yminrange, wminrange)
@@ -147,8 +147,7 @@ contains
     ! integral from (0, ELFmin)
     wminrange = linspace(0.001_dp, ELFmin, size(wminrange))
     do i = 1, size(wminrange)
-       yminrange(i) = wminrange(i) * mELF(k, wminrange(i), kbT, mu!), &
-            !1e-3_dp, 0._dp)
+       yminrange(i) = wminrange(i) * ELF(k, wminrange(i), kbT, mu)!
     end do
     
     omegaint = trapezoidal(yminrange, wminrange)
@@ -158,8 +157,7 @@ contains
     
     ! compute integrand for each point in w
     do i = 1, size(wELFrange)
-       yELFrange(i) = wELFrange(i) * mELF(k, wELFrange(i), kbT, mu!), &
-            !1e-3_dp, 0._dp)
+       yELFrange(i) = wELFrange(i) * ELF(k, wELFrange(i), kbT, mu)
     end do
     
     ! ELFmin < kv < ELFmax
@@ -172,8 +170,8 @@ contains
        wtemp = wELFrange(i)
        ytemp = yELFrange(i)
        wELFrange(i) = k*v
-       yELFrange(i) = wELFrange(i) * mELF(k, wELFrange(i), kbT, mu!), &
-            !1e-3_dp, 0._dp)
+       yELFrange(i) = wELFrange(i) * ELF(k, wELFrange(i), kbT, mu)
+
        omegaint = omegaint + trapezoidal(yELFrange(1:i), wELFrange(1:i))
        
        ! integral from [kv, ELFmax \approx \infty]
@@ -192,8 +190,8 @@ contains
        ! integral from (ELFmax, kv)
        wmaxrange = linspace(ELFmax, k*v, size(wmaxrange))
        do i = 1, size(wmaxrange)
-          ymaxrange(i) = wmaxrange(i) * mELF(k, wmaxrange(i), kbT, mu!), &
-               !1e-3_dp, 0._dp)
+          ymaxrange(i) = wmaxrange(i) * ELF(k, wmaxrange(i), kbT, mu)
+     
        end do
        
        omegaint = omegaint + trapezoidal(ymaxrange, wmaxrange)
