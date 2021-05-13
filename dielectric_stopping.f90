@@ -43,9 +43,9 @@ contains
     
   end function FEGdensity
 
-  function srdensity(kbT, mu) result(den)
+  function srdensity(nur, nui, kbT, mu) result(den)
     !! Compute density using the f-sum rule
-    real(dp), intent(in) :: kBT, mu
+    real(dp), intent(in) :: kBT, mu, nur, nui
     real(dp) :: den
     real(dp) :: k, v, n, int ! dummy variables
     logical  :: srcheck
@@ -58,7 +58,7 @@ contains
     do while (.not. srcheck)
        ! In omegaintegral, we want k*v > ELFmaxpos + ELFwidth
        v = modBG_wp(n, kbT, mu)/k + sqrt(2*(20*kbT + mu))
-       call omegaintegral(v, k, kbT, mu, n, int, srcheck)
+       call omegaintegral(v, k, nur, nui, kbT, mu, n, int, srcheck)
        k = k + 1.
     end do
 
@@ -95,8 +95,16 @@ contains
                + 0.088 * n * therm_deBroglie**3 + k**4/4)
   end function modBG_wp
 
-  subroutine omegaintegral(v, k, kbT, mu, density, omegaint, SRsatisfy)
-    real(dp), intent(in)    :: v, k, kbT, mu, density
+  subroutine omegaintegral(v, k, nur, nui, kbT, mu, density, omegaint, SRsatisfy)
+    !!
+    !!
+    ! Parameters:
+    ! ___________
+    !
+    ! Returns:
+    ! ________
+    !
+    real(dp), intent(in)    :: v, k, kbT, mu, density, nur, nui
     real(dp), intent(inout) :: omegaint
     logical , intent(inout) :: SRsatisfy
     real(dp) :: int_allspace ! integral over all space, should give sum rule
@@ -130,8 +138,8 @@ contains
 
        wminrange = linspace(0.001_dp, k*v, size(wminrange))
        do i = 1, size(wminrange)
-          yminrange(i) = wminrange(i) * mELF(k, wminrange(i), kbT, mu)!, &
-               ! 1e-3_dp, 0._dp)
+          yminrange(i) = wminrange(i) * mELF(k, wminrange(i), kbT, mu, &
+               1e-3_dp, 0._dp)
        end do
        
        omegaint = trapezoidal(yminrange, wminrange)
@@ -147,8 +155,8 @@ contains
     ! integral from (0, ELFmin)
     wminrange = linspace(0.001_dp, ELFmin, size(wminrange))
     do i = 1, size(wminrange)
-       yminrange(i) = wminrange(i) * mELF(k, wminrange(i), kbT, mu!), &
-            !1e-3_dp, 0._dp)
+       yminrange(i) = wminrange(i) * mELF(k, wminrange(i), kbT, mu, &
+            nur, nui)
     end do
     
     omegaint = trapezoidal(yminrange, wminrange)
@@ -158,8 +166,8 @@ contains
     
     ! compute integrand for each point in w
     do i = 1, size(wELFrange)
-       yELFrange(i) = wELFrange(i) * mELF(k, wELFrange(i), kbT, mu!), &
-            !1e-3_dp, 0._dp)
+       yELFrange(i) = wELFrange(i) * mELF(k, wELFrange(i), kbT, mu, &
+            nur, nui)
     end do
     
     ! ELFmin < kv < ELFmax
@@ -172,8 +180,8 @@ contains
        wtemp = wELFrange(i)
        ytemp = yELFrange(i)
        wELFrange(i) = k*v
-       yELFrange(i) = wELFrange(i) * mELF(k, wELFrange(i), kbT, mu!), &
-            !1e-3_dp, 0._dp)
+       yELFrange(i) = wELFrange(i) * mELF(k, wELFrange(i), kbT, mu, &
+            nur, nui)
        omegaint = omegaint + trapezoidal(yELFrange(1:i), wELFrange(1:i))
        
        ! integral from [kv, ELFmax \approx \infty]
@@ -192,8 +200,8 @@ contains
        ! integral from (ELFmax, kv)
        wmaxrange = linspace(ELFmax, k*v, size(wmaxrange))
        do i = 1, size(wmaxrange)
-          ymaxrange(i) = wmaxrange(i) * mELF(k, wmaxrange(i), kbT, mu!), &
-               !1e-3_dp, 0._dp)
+          ymaxrange(i) = wmaxrange(i) * mELF(k, wmaxrange(i), kbT, mu, &
+               nur, nui)
        end do
        
        omegaint = omegaint + trapezoidal(ymaxrange, wmaxrange)
@@ -216,8 +224,8 @@ contains
 
   end subroutine omegaintegral
 
-  subroutine stoppingintegral(v, kbT, mu, kint, upper_bound_err)
-    real(dp), intent(in)    :: v, kbT, mu
+  subroutine stoppingintegral(v, kbT, nur, nui, mu, kint, upper_bound_err)
+    real(dp), intent(in)    :: v, kbT, mu, nur, nui
     real(dp), intent(inout) :: kint ! stopping power integral
     real(dp), intent(inout) :: upper_bound_err ! upper bound on error
     real(dp)                :: density, width, kint_upperbound
@@ -228,7 +236,7 @@ contains
     real(dp)                :: klowest ! Lowest value of k for which we satisfy
                                        ! the sum rule
     
-    density = srdensity(kbT, mu)
+    density = srdensity(nur, nui, kbT, mu)
 
     N = size(k)
     width = (2*(10*kbT + mu))**(0.5)
@@ -242,7 +250,7 @@ contains
     !print *,  y(1)
     do i = 1, N !N, 1, -1
        ! print *, i
-       call omegaintegral(v, k(i), kbT, mu, density, y(i), SRsatisfy)
+       call omegaintegral(v, k(i), nur, nui, kbT, mu, density, y(i), SRsatisfy)
        ! print *, SRsatisfy
        y(i) = y(i) / k(i)
        if (.not. SRsatisfy) then
