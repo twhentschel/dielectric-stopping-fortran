@@ -139,7 +139,7 @@ contains
        wminrange = linspace(0.001_dp, k*v, size(wminrange))
        do i = 1, size(wminrange)
           yminrange(i) = wminrange(i) * mELF(k, wminrange(i), kbT, mu, &
-               1e-3_dp, 0._dp)
+               nur, nui)
        end do
        
        omegaint = trapezoidal(yminrange, wminrange)
